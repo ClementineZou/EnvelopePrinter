@@ -1,0 +1,1098 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>信封打印工具 EnvelopePrinter</title>
+    
+    <!-- 字体与图标 -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900|Material+Icons" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+    
+    <!-- Vuetify 3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@3.4.0/dist/vuetify.min.css" rel="stylesheet">
+    
+    <!-- Google Fonts for better multilingual support -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* 基础样式 */
+        body {
+            font-family: 'Roboto', 'Noto Sans SC', 'Noto Sans TC', sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        /* 移动设备不支持提示 */
+        .mobile-warning {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #fafafa;
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .mobile-warning-content {
+            background: white;
+            border-radius: 28px;
+            padding: 48px 32px;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 8px 16px rgba(0,0,0,0.08);
+        }
+
+        .mobile-warning-icon {
+            font-size: 56px;
+            margin-bottom: 24px;
+            opacity: 0.9;
+        }
+
+        .mobile-warning h2 {
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            font-size: 22px;
+            font-weight: 500;
+            letter-spacing: -0.5px;
+        }
+
+        .mobile-warning p {
+            color: #5f6368;
+            line-height: 1.5;
+            margin-bottom: 8px;
+            font-size: 15px;
+            font-weight: 400;
+        }
+
+        .mobile-warning-footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e8eaed;
+            color: #80868b;
+            font-size: 13px;
+            font-weight: 400;
+        }
+
+        .list-subtitle-multiline {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: initial !important;
+            display: block;
+            line-height: 1.5;
+        }
+
+        /* 预览区域样式 */
+        .preview-container {
+            background-color: #9e9e9e;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            min-height: 500px;
+            border-radius: 8px;
+        }
+
+        /* 信封本体样式 */
+        .envelope {
+            background: white;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            /* 强制背景打印 */
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* 邮政编码框 (中国标准) */
+        .zip-box-container {
+            display: flex;
+            gap: 5px; /* 间距 */
+            position: absolute;
+        }
+        .zip-box {
+            width: 10mm; /* 标准大致宽度 */
+            height: 10mm;
+            border: 1px solid #dc3545; /* 邮政红 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16pt;
+            font-weight: bold;
+            color: #333;
+        }
+        .zip-no-box {
+            width: 10mm;
+            height: 10mm;
+            border: none; /* 无边框 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16pt;
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* 文本区域通用 */
+        .text-block {
+            position: absolute;
+            padding: 10px;
+        }
+
+        /* Logo 容器样式 */
+        .logo-container {
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        .logo-container .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #2196F3;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .logo-container .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .logo-container .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .logo-container .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .logo-container .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+        .logo-container .delete-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 24px;
+            height: 24px;
+            background: #f44336;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .logo-container .delete-btn:hover {
+            background: #d32f2f;
+        }
+
+        .logo-container.active {
+            outline: 2px dashed #2196F3;
+            outline-offset: 2px;
+        }
+
+        /* 打印专用 CSS */
+        @media print {
+            @page {
+                margin: 0;
+            }
+            body, html {
+                margin: 0;
+                padding: 0;
+                background: white;
+                height: 100%;
+                width: 100%;
+            }
+            /* 隐藏所有UI控件，只保留信封 */
+            .no-print {
+                display: none !important;
+            }
+            
+            .v-application {
+                background: white !important;
+            }
+
+            .preview-container {
+                padding: 0;
+                margin: 0;
+                background: white;
+                display: block;
+                height: auto;
+                min-height: 0;
+            }
+
+            .envelope {
+                box-shadow: none;
+                margin: 0;
+                /* 确保绝对定位打印准确 */
+                left: 0 !important;
+                top: 0 !important;
+                transform: none !important;
+            }
+
+            /* 隐藏 Logo 控制元素 */
+            .logo-container .resize-handle,
+            .logo-container .delete-btn {
+                display: none !important;
+            }
+
+            .logo-container.active {
+                outline: none !important;
+            }
+
+            .mobile-warning {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 移动设备警告 -->
+    <div class="mobile-warning" id="mobileWarning">
+        <div class="mobile-warning-content">
+            <div class="mobile-warning-icon">💻</div>
+            <h2>请使用电脑访问</h2>
+            <p>信封打印工具需要在<strong>桌面电脑</strong>上使用，以确保最佳的编辑和打印体验。</p>
+            <p>手机和平板设备暂不支持。</p>
+            <div class="mobile-warning-footer">
+                📧 EnvelopePrinter
+            </div>
+        </div>
+    </div>
+
+    <div id="app">
+        <v-app>
+            <!-- 顶部导航 -->
+            <v-app-bar color="primary" density="compact" elevation="2" class="no-print">
+                <v-app-bar-title>✉️ 信封打印工具 EnvelopePrinter</v-app-bar-title>
+                <v-spacer></v-spacer>
+                <v-tooltip :text="isFormValid ? '立即打印' : '请填写所有必填项'" location="bottom">
+                    <template v-slot:activator="{ props }">
+                        <v-btn 
+                            prepend-icon="mdi-printer" 
+                            variant="tonal" 
+                            class="bg-white text-primary" 
+                            @click="printEnvelope"
+                            :disabled="!isFormValid"
+                            v-bind="props"
+                        >
+                            立即打印
+                        </v-btn>
+                    </template>
+                </v-tooltip>
+            </v-app-bar>
+
+            <v-main>
+                <v-container fluid class="fill-height align-start">
+                    <v-row class="fill-height">
+                        
+                        <!-- 左侧：设置面板 -->
+                        <v-col cols="12" md="4" lg="3" class="no-print" style="max-height: 90vh; overflow-y: auto;">
+                            <v-card class="mb-4">
+                                <v-tabs v-model="activeTab" bg-color="primary">
+                                    <v-tab value="content">内容</v-tab>
+                                    <v-tab value="style">样式</v-tab>
+                                    <v-tab value="settings">设置</v-tab>
+                                </v-tabs>
+
+                                <v-card-text>
+                                    <v-window v-model="activeTab">
+                                        <!-- 内容设置 -->
+                                        <v-window-item value="content">
+                                            <v-expansion-panels variant="accordion" multiple v-model="panels">
+                                                <v-expansion-panel value="recipient">
+                                                    <v-expansion-panel-title>收件人信息（TO）</v-expansion-panel-title>
+                                                    <v-expansion-panel-text>
+                                                        <v-text-field 
+                                                            v-model="recipient.name" 
+                                                            label="姓名/称呼" 
+                                                            density="compact" 
+                                                            variant="outlined" 
+                                                            :rules="[v => !!v || '收件人姓名为必填项']"
+                                                            required
+                                                            hide-details="auto"
+                                                            class="mt-3 mb-4"
+                                                        ></v-text-field>
+                                                        <v-text-field v-model="recipient.org" label="公司/机构（可选）" density="compact" variant="outlined" hide-details class="mb-4"></v-text-field>
+                                                        <v-textarea 
+                                                            v-model="recipient.address" 
+                                                            label="详细地址" 
+                                                            rows="3" 
+                                                            density="compact" 
+                                                            variant="outlined" 
+                                                            :rules="[v => !!v || '收件人地址为必填项']"
+                                                            required
+                                                            hide-details="auto"
+                                                            class="mb-4"
+                                                        ></v-textarea>
+                                                        <v-text-field 
+                                                            v-model="recipient.zip" 
+                                                            label="邮政编码" 
+                                                            density="compact" 
+                                                            variant="outlined" 
+                                                            :rules="[v => !!v || '收件人邮政编码为必填项']"
+                                                            required
+                                                            hide-details="auto"
+                                                            class="mb-4"
+                                                        ></v-text-field>
+                                                        <v-text-field v-model="recipient.phone" label="联系电话（可选）" density="compact" variant="outlined" hide-details></v-text-field>
+                                                    </v-expansion-panel-text>
+                                                </v-expansion-panel>
+
+                                                <v-expansion-panel value="sender">
+                                                    <v-expansion-panel-title>发件人信息（From）</v-expansion-panel-title>
+                                                    <v-expansion-panel-text>
+                                                        <v-text-field 
+                                                            v-model="sender.name" 
+                                                            label="姓名" 
+                                                            density="compact" 
+                                                            variant="outlined" 
+                                                            :rules="[v => !!v || '发件人姓名为必填项']"
+                                                            required
+                                                            hide-details="auto"
+                                                            class="mt-3 mb-4"
+                                                        ></v-text-field>
+                                                        <v-text-field v-model="sender.org" label="公司/机构（可选）" density="compact" variant="outlined" hide-details class="mb-4"></v-text-field>
+                                                        <v-textarea 
+                                                            v-model="sender.address" 
+                                                            label="地址" 
+                                                            rows="2" 
+                                                            density="compact" 
+                                                            variant="outlined" 
+                                                            :rules="[v => !!v || '发件人地址为必填项']"
+                                                            required
+                                                            hide-details="auto"
+                                                            class="mb-4"
+                                                        ></v-textarea>
+                                                        <v-text-field 
+                                                            v-model="sender.zip" 
+                                                            label="邮政编码" 
+                                                            density="compact" 
+                                                            variant="outlined" 
+                                                            :rules="[v => !!v || '发件人邮政编码为必填项']"
+                                                            required
+                                                            hide-details="auto"
+                                                            class="mb-4"
+                                                        ></v-text-field>
+                                                        <v-text-field v-model="sender.phone" label="联系电话（可选）" density="compact" variant="outlined" hide-details></v-text-field>
+                                                    </v-expansion-panel-text>
+                                                </v-expansion-panel>
+
+                                                <v-expansion-panel value="meta">
+                                                    <v-expansion-panel-title>其它 & Logo</v-expansion-panel-title>
+                                                    <v-expansion-panel-text>
+                                                        <v-text-field v-model="meta.subject" label="信件主题/备注（可选）" placeholder="例如：重要文件" density="compact" variant="outlined" class="mt-3 mb-3"></v-text-field>
+                                                        
+                                                        <v-file-input 
+                                                            v-model="logoFile"
+                                                            accept="image/*" 
+                                                            label="上传 Logo" 
+                                                            density="compact" 
+                                                            variant="outlined"
+                                                            prepend-icon="mdi-camera"
+                                                            @change="handleLogoUpload"
+                                                            @update:modelValue="handleLogoUpload"
+                                                            hide-details
+                                                            class="mb-2"
+                                                        ></v-file-input>
+                                                        
+                                                        <v-alert v-if="logoConfig.src" type="success" variant="tonal" density="compact" class="text-caption mb-2">
+                                                            Logo 已上传！可在右侧预览区拖动、缩放图片
+                                                        </v-alert>
+                                                        
+                                                        <v-btn v-if="logoConfig.src" size="small" color="error" variant="outlined" @click="clearLogo" block class="mb-2">
+                                                            <v-icon start>mdi-delete</v-icon>
+                                                            清除 Logo
+                                                        </v-btn>
+                                                    </v-expansion-panel-text>
+                                                </v-expansion-panel>
+                                            </v-expansion-panels>
+                                        </v-window-item>
+
+                                        <!-- 样式与模板 -->
+                                        <v-window-item value="style">
+                                            <v-select
+                                                v-model="selectedRegion"
+                                                :items="regions"
+                                                item-title="label"
+                                                item-value="value"
+                                                label="地区模板风格"
+                                                variant="outlined"
+                                                density="compact"
+                                                class="mt-3 mb-1"
+                                                hide-details
+                                            ></v-select>
+                                            <v-alert type="info" variant="tonal" density="compact" class="mt-2 mb-1 text-caption">
+                                                {{ currentRegionDesc }}
+                                            </v-alert>
+
+                                            <p class="text-subtitle-2 mb-2 mt-2">字体大小调整</p>
+                                            <v-slider v-model="styleConfig.fontSize" min="10" max="24" step="1" thumb-label label="基准字号" hide-details class="mb-1"></v-slider>
+                                            
+                                            <p class="text-subtitle-2 mb-2 mt-2">显示选项</p>
+                                            <div class="pl-3">
+                                                <v-switch v-if="selectedRegion === 'cn'" v-model="styleConfig.showZipBox" color="primary" label="显示邮编红框" density="compact" hide-details></v-switch>
+                                                <v-switch v-model="styleConfig.showGrid" color="primary" label="显示对齐辅助线" density="compact" hide-details class="mb-2"></v-switch>
+                                            </div>
+                                        </v-window-item>
+
+                                        <!-- 页面设置 -->
+                                        <v-window-item value="settings">
+                                            <v-select
+                                                v-model="selectedSize"
+                                                :items="envelopeSizes"
+                                                item-title="name"
+                                                return-object
+                                                label="信封规格"
+                                                variant="outlined"
+                                                density="compact"
+                                                class="mt-3 mb-3"
+                                                hide-details
+                                            ></v-select>
+                                            
+                                            <div v-if="selectedSize.id === 'custom'" class="mt-3">
+                                                <v-row>
+                                                    <v-col cols="6">
+                                                        <v-text-field v-model.number="customSize.width" type="number" label="宽度（mm）" density="compact" variant="outlined" hide-details></v-text-field>
+                                                    </v-col>
+                                                    <v-col cols="6">
+                                                        <v-text-field v-model.number="customSize.height" type="number" label="高度（mm）" density="compact" variant="outlined" hide-details></v-text-field>
+                                                    </v-col>
+                                                </v-row>
+                                            </div>
+
+                                            <p class="text-caption text-grey mt-3">
+                                                当前尺寸: {{ currentDimensions.width }}mm x {{ currentDimensions.height }}mm
+                                            </p>
+                                            <v-divider class="my-3"></v-divider>
+                                            <p class="text-subtitle-2 mb-2">预览缩放</p>
+                                            <v-slider v-model="previewScale" min="0.5" max="1.5" step="0.1" prepend-icon="mdi-magnify-minus" append-icon="mdi-magnify-plus" class="px-0"></v-slider>
+                                        </v-window-item>
+                                    </v-window>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+
+                        <!-- 右侧：预览区域 -->
+                        <v-col cols="12" md="8" lg="9" class="preview-container">
+                            <!-- 动态注入打印CSS -->
+                            <component is="style">{{ printCss }}</component>
+
+                            <!-- 信封本体 -->
+                            <div 
+                                id="envelope-area" 
+                                class="envelope"
+                                :style="envelopeStyle"
+                            >
+                                <!-- 背景辅助线 (不打印) -->
+                                <div v-if="styleConfig.showGrid" class="no-print" style="position:absolute; inset:0; border: 1px dashed #ddd; z-index:0; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr);">
+                                    <div style="border-right: 1px dashed #ddd; border-bottom: 1px dashed #ddd;"></div>
+                                    <div style="border-bottom: 1px dashed #ddd;"></div>
+                                </div>
+
+                                <!-- Logo 可拖动缩放容器 -->
+                                <div 
+                                    v-if="logoConfig.src" 
+                                    class="logo-container no-print-controls"
+                                    :class="{ active: logoConfig.isActive }"
+                                    :style="logoStyle"
+                                    @mousedown="startDrag"
+                                    @click="activateLogo"
+                                >
+                                    <img :src="logoConfig.src" draggable="false">
+                                    
+                                    <!-- 调整大小的控制点 -->
+                                    <template v-if="logoConfig.isActive">
+                                        <div class="resize-handle nw" @mousedown.stop="startResize($event, 'nw')"></div>
+                                        <div class="resize-handle ne" @mousedown.stop="startResize($event, 'ne')"></div>
+                                        <div class="resize-handle sw" @mousedown.stop="startResize($event, 'sw')"></div>
+                                        <div class="resize-handle se" @mousedown.stop="startResize($event, 'se')"></div>
+                                        <div class="delete-btn" @click.stop="clearLogo" title="删除 Logo">×</div>
+                                    </template>
+                                </div>
+
+                                <!-- 
+                                    布局模式 1: 中国大陆标准 (CN) 
+                                    特点：左上角邮编框，右下角邮编框，横排
+                                -->
+                                <template v-if="selectedRegion === 'cn'">
+                                    <!-- 收件人邮编 (左上) -->
+                                    <div class="zip-box-container" style="top: 10mm; left: 15mm;">
+                                        <div :class="styleConfig.showZipBox ? 'zip-box' : 'zip-no-box'" v-for="(num, index) in 6" :key="'r-zip-'+index">
+                                            {{ recipient.zip[index] || '' }}
+                                        </div>
+                                    </div>
+
+                                    <!-- 收件人地址 (中间偏左上) -->
+                                    <div class="text-block" style="top: 35mm; left: 25mm; right: 20mm; z-index: 5;">
+                                        <div :style="{ fontSize: (styleConfig.fontSize * 1.2) + 'px', fontWeight: 'bold', lineHeight: 1.5 }">
+                                            <div style="border-bottom: 1px solid #eee; display: inline-block; padding-bottom: 2px; margin-bottom: 5px;">TO: {{ recipient.name }} {{ recipient.org ? `(${recipient.org})` : '' }}</div>
+                                        </div>
+                                        <div :style="{ fontSize: (styleConfig.fontSize * 1.1) + 'px', lineHeight: 1.6 }">
+                                            {{ recipient.address }}
+                                        </div>
+                                        <div v-if="recipient.phone" :style="{ fontSize: (styleConfig.fontSize * 0.9) + 'px', marginTop: '4px', color: '#666' }">
+                                            Tel.: {{ recipient.phone }}
+                                        </div>
+                                    </div>
+
+                                    <!-- 发件人地址 (右下) -->
+                                    <div class="text-block" style="bottom: 25mm; right: 15mm; text-align: right; z-index: 5;">
+                                        <div style="border-top: 1px solid #eee; padding-top: 5px; display:inline-block; text-align: left; min-width: 200px;">
+                                            <div :style="{ fontSize: (styleConfig.fontSize * 0.9) + 'px' }">
+                                                <strong>From:</strong> {{ sender.name }}{{ sender.org ? ` (${sender.org})` : '' }}
+                                            </div>
+                                            <div :style="{ fontSize: (styleConfig.fontSize * 0.8) + 'px' }">
+                                                {{ sender.address }}
+                                            </div>
+                                            <div v-if="sender.phone" :style="{ fontSize: (styleConfig.fontSize * 0.8) + 'px' }">
+                                                Tel.: {{ sender.phone }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 发件人邮编 (右下) -->
+                                    <div class="zip-box-container" style="bottom: 10mm; right: 15mm;">
+                                        <div :class="styleConfig.showZipBox ? 'zip-box' : 'zip-no-box'" v-for="(num, index) in 6" :key="'s-zip-'+index">
+                                            {{ sender.zip[index] || '' }}
+                                        </div>
+                                    </div>
+
+                                    <!-- 备注 -->
+                                    <div v-if="meta.subject" style="position:absolute; bottom: 40mm; left: 30mm; color: #666; font-size: 14px;">
+                                        {{ meta.subject }}
+                                    </div>
+                                </template>
+
+                                <!-- 
+                                    布局模式 2: 国际通用 / 港澳台横版 (International)
+                                    特点：左上发件人，正中收件人，无邮编框
+                                -->
+                                <template v-else>
+                                    <!-- 发件人 (左上) -->
+                                    <div class="text-block" style="top: 15mm; left: 15mm; z-index: 5;">
+                                        <div :style="{ fontSize: (styleConfig.fontSize * 0.8) + 'px', lineHeight: 1.4, color: '#444' }">
+                                            <strong>{{ sender.name }}</strong>{{ sender.org ? ` (${sender.org})` : '' }}<br>
+                                            <span style="white-space: pre-wrap;">{{ sender.address }}</span><br>
+                                            <span v-if="sender.zip">{{ sender.zip }}</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 收件人 (正中偏右) -->
+                                    <div class="text-block" style="top: 50%; left: 50%; transform: translate(-40%, -40%); width: 60%; z-index: 5;">
+                                        <div v-if="meta.subject" style="color: #666; font-size: 0.8em; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
+                                            {{ meta.subject }}
+                                        </div>
+                                        <div :style="{ fontSize: (styleConfig.fontSize * 1.4) + 'px', fontWeight: 'bold', marginBottom: '8px' }">
+                                            {{ recipient.name }}
+                                        </div>
+                                        <div v-if="recipient.org" :style="{ fontSize: (styleConfig.fontSize * 1.1) + 'px', marginBottom: '4px' }">
+                                            {{ recipient.org }}
+                                        </div>
+                                        <div :style="{ fontSize: (styleConfig.fontSize * 1.2) + 'px', lineHeight: 1.5 }">
+                                            <span style="white-space: pre-wrap;">{{ recipient.address }}</span><br>
+                                            <strong v-if="recipient.zip" style="font-size: 1.1em; display: inline-block; margin-top: 5px;">{{ recipient.zip }}</strong>
+                                        </div>
+                                        <div v-if="recipient.phone" :style="{ fontSize: (styleConfig.fontSize * 1.0) + 'px', marginTop: '6px', color: '#555' }">
+                                            Tel: {{ recipient.phone }}
+                                        </div>
+                                    </div>
+
+                                    <!-- 邮票占位符 (仅视觉参考) -->
+                                    <div class="no-print" style="position: absolute; top: 15mm; right: 15mm; width: 25mm; height: 30mm; background: #eee; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; color: #999; font-size: 10px;">
+                                        邮票区域
+                                    </div>
+                                </template>
+
+                            </div>
+                        </v-col>
+                    </v-row>
+                </v-container>
+            </v-main>
+
+            <!-- 打印设置提示弹窗 -->
+            <v-dialog v-model="showPrintDialog" max-width="600" class="no-print">
+                <v-card>
+                    <v-card-title class="text-h6 bg-primary text-white">
+                        <v-icon start>mdi-printer-settings</v-icon>
+                        打印设置指引
+                    </v-card-title>
+                    <v-card-text class="pt-6">
+                        <v-alert type="info" variant="tonal" class="mb-4">
+                            为了确保打印效果，请按照以下步骤设置打印选项：
+                        </v-alert>
+
+                        <v-list density="compact">
+                            <v-list-item>
+                                <template v-slot:prepend>
+                                    <v-avatar color="primary" size="32">
+                                        <span class="text-white">1</span>
+                                    </v-avatar>
+                                </template>
+                                <v-list-item-title class="font-weight-medium">选择打印机</v-list-item-title>
+                                <v-list-item-subtitle>确认已连接到打印机，并选择正确的打印设备</v-list-item-subtitle>
+                            </v-list-item>
+
+                            <v-list-item class="mt-2">
+                                <template v-slot:prepend>
+                                    <v-avatar color="primary" size="32">
+                                        <span class="text-white">2</span>
+                                    </v-avatar>
+                                </template>
+                                <v-list-item-title class="font-weight-medium">设置纸张尺寸</v-list-item-title>
+                                <v-list-item-subtitle class="list-subtitle-multiline">
+                                    在打印对话框中，选择 <strong>"更多设置"</strong> 或 <strong>"页面设置"</strong>，<br>
+                                    将纸张尺寸设置为：<strong>{{ currentSizeLabel }}</strong>
+                                </v-list-item-subtitle>
+                            </v-list-item>
+
+                            <v-list-item class="mt-2">
+                                <template v-slot:prepend>
+                                    <v-avatar color="primary" size="32">
+                                        <span class="text-white">3</span>
+                                    </v-avatar>
+                                </template>
+                                <v-list-item-title class="font-weight-medium">设置页边距为 0</v-list-item-title>
+                                <v-list-item-subtitle>在打印设置中，将所有页边距（上下左右）设置为 <strong>0mm</strong> 或 <strong>“无”</strong></v-list-item-subtitle>
+                            </v-list-item>
+
+                            <v-list-item class="mt-2">
+                                <template v-slot:prepend>
+                                    <v-avatar color="primary" size="32">
+                                        <span class="text-white">4</span>
+                                    </v-avatar>
+                                </template>
+                                <v-list-item-title class="font-weight-medium">关闭页眉和页脚</v-list-item-title>
+                                <v-list-item-subtitle>取消勾选 <strong>“页眉和页脚”</strong>，以免打印额外信息</v-list-item-subtitle>
+                            </v-list-item>
+
+                            <v-list-item class="mt-2">
+                                <template v-slot:prepend>
+                                    <v-avatar color="primary" size="32">
+                                        <span class="text-white">5</span>
+                                    </v-avatar>
+                                </template>
+                                <v-list-item-title class="font-weight-medium">启用背景图形</v-list-item-title>
+                                <v-list-item-subtitle>勾选 <strong>“背景图形”</strong> 选项，确保 Logo 和样式正常显示</v-list-item-subtitle>
+                            </v-list-item>
+                        </v-list>
+
+                        <v-alert type="warning" variant="tonal" class="mt-4" density="compact">
+                            <strong>提示：</strong>不同浏览器的打印设置界面可能略有不同，但设置选项基本一致。
+                        </v-alert>
+                    </v-card-text>
+                    <v-card-actions class="px-6 pb-4">
+                        <v-spacer></v-spacer>
+                        <v-btn variant="text" @click="showPrintDialog = false">
+                            取消
+                        </v-btn>
+                        <v-btn color="primary" variant="elevated" prepend-icon="mdi-printer" @click="confirmPrint">
+                            确认并打印
+                        </v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+        </v-app>
+    </div>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <!-- Vuetify 3 -->
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3.4.0/dist/vuetify.min.js"></script>
+
+    <script>
+        const { createApp, ref, computed, reactive } = Vue;
+        const { createVuetify } = Vuetify;
+
+        const app = createApp({
+            setup() {
+                // UI 状态
+                const activeTab = ref('content');
+                const panels = ref(['recipient', 'sender']); // 默认展开
+                const previewScale = ref(1.0);
+                const logoFile = ref(null);
+                const showPrintDialog = ref(false);
+
+                // 数据模型
+                const sender = reactive({
+                    name: '张三 / Peter Zhang',
+                    org: '北京大学',
+                    address: '北京市海淀区颐和园路5号\n5 Yiheyuan Road, Haidian, Beijing, P.R. China',
+                    zip: '100871',
+                    phone: '+86 135 0000 0000'
+                });
+
+                const recipient = reactive({
+                    name: '李四 教授 / Dr. John Li',
+                    org: '清华大学',
+                    address: '北京市海淀区双清路30号\n30 Shuangqing Road, Haidian, Beijing, P.R. China',
+                    zip: '100000',
+                    phone: '+86 159 0000 0000'
+                });
+
+                const meta = reactive({
+                    subject: ''
+                });
+
+                // Logo 配置（支持拖动、缩放）
+                const logoConfig = reactive({
+                    src: null,
+                    x: 20, // mm
+                    y: 20, // mm
+                    width: 40, // mm
+                    height: 25, // mm
+                    isActive: false,
+                    isDragging: false,
+                    isResizing: false,
+                    resizeDirection: null,
+                    startX: 0,
+                    startY: 0,
+                    startWidth: 0,
+                    startHeight: 0,
+                    startPosX: 0,
+                    startPosY: 0
+                });
+
+                const styleConfig = reactive({
+                    fontSize: 14,
+                    showGrid: false,
+                    showZipBox: true
+                });
+
+                // 地区与模板
+                const regions = [
+                    { label: '中国大陆标准（红框邮编）', value: 'cn', desc: '适用于国内信件，包含标准的红色邮政编码框。' },
+                    { label: '国际/港澳台通用（International）', value: 'intl', desc: '适用于国际邮件、港澳地区及台湾横版信封。无固定邮编框，采用标准西式排版。' }
+                ];
+                const selectedRegion = ref('cn'); // 默认中国大陆
+
+                // 信封尺寸定义 (单位 mm)
+                const envelopeSizes = [
+                    { name: 'DL 标准信封（220 x 110mm）', id: 'dl', width: 220, height: 110 },
+                    { name: 'C5 号信封（229 x 162mm）', id: 'c5', width: 229, height: 162 },
+                    { name: 'C6 号信封（162 x 114mm）', id: 'c6', width: 162, height: 114 },
+                    { name: 'C7 号信封（114 x 81mm）', id: 'c7', width: 114, height: 81 },
+                    { name: 'ZL 国内标准（230 x 120mm）', id: 'zl', width: 230, height: 120 },
+                    { name: '#10 美式信封（4.125 x 9.5in）', id: 'no10', width: 241.3, height: 104.8 }, // 9.5in * 25.4, 4.125in * 25.4
+                    { name: '自定义尺寸', id: 'custom', width: 0, height: 0 }
+                ];
+                const selectedSize = ref(envelopeSizes[0]); // 默认 DL
+                const customSize = reactive({ width: 220, height: 110 });
+
+                // 计算属性
+                const currentRegionDesc = computed(() => {
+                    return regions.find(r => r.value === selectedRegion.value)?.desc;
+                });
+
+                const currentSizeLabel = computed(() => {
+                    return selectedSize.value?.name || '自定义尺寸';
+                });
+
+                // 表单验证：检查必填项是否已填写
+                const isFormValid = computed(() => {
+                    const recipientValid = recipient.name.trim() !== '' && 
+                                          recipient.address.trim() !== '' && 
+                                          recipient.zip.trim() !== '';
+                    const senderValid = sender.name.trim() !== '' && 
+                                       sender.address.trim() !== '' && 
+                                       sender.zip.trim() !== '';
+                    return recipientValid && senderValid;
+                });
+
+                const currentDimensions = computed(() => {
+                    if (selectedSize.value.id === 'custom') {
+                        return { width: customSize.width, height: customSize.height };
+                    }
+                    return { width: selectedSize.value.width, height: selectedSize.value.height };
+                });
+
+                // 用于预览的 Style (包含缩放)
+                const envelopeStyle = computed(() => {
+                    const dim = currentDimensions.value;
+                    return {
+                        width: `${dim.width}mm`,
+                        height: `${dim.height}mm`,
+                        transform: `scale(${previewScale.value})`,
+                        transformOrigin: 'center center' // 居中缩放
+                    };
+                });
+
+                // 动态生成打印用 CSS (@page 规则)
+                const printCss = computed(() => {
+                    const dim = currentDimensions.value;
+                    return `
+                        @media print {
+                            @page {
+                                size: ${dim.width}mm ${dim.height}mm;
+                                margin: 0;
+                            }
+                            #envelope-area {
+                                width: ${dim.width}mm !important;
+                                height: ${dim.height}mm !important;
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                            }
+                        }
+                    `;
+                });
+
+                // Logo 样式计算
+                const logoStyle = computed(() => {
+                    return {
+                        left: `${logoConfig.x}mm`,
+                        top: `${logoConfig.y}mm`,
+                        width: `${logoConfig.width}mm`,
+                        height: `${logoConfig.height}mm`
+                    };
+                });
+
+                // 方法
+                const handleLogoUpload = (fileInput) => {
+                    console.log('handleLogoUpload called with:', fileInput);
+                    
+                    // 处理不同类型的输入
+                    let file = null;
+                    
+                    if (!fileInput) {
+                        console.log('No file input');
+                        return;
+                    }
+                    
+                    // 如果是 File 对象
+                    if (fileInput instanceof File) {
+                        file = fileInput;
+                    }
+                    // 如果是数组
+                    else if (Array.isArray(fileInput) && fileInput.length > 0) {
+                        file = fileInput[0];
+                    }
+                    // 如果是 FileList
+                    else if (fileInput instanceof FileList && fileInput.length > 0) {
+                        file = fileInput[0];
+                    }
+                    // 如果是事件对象
+                    else if (fileInput.target && fileInput.target.files) {
+                        file = fileInput.target.files[0];
+                    }
+                    
+                    if (!file) {
+                        console.log('No valid file found');
+                        return;
+                    }
+                    
+                    console.log('Processing file:', file.name, file.type);
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        console.log('File loaded successfully');
+                        logoConfig.src = e.target.result;
+                        logoConfig.isActive = true;
+                        // 重置位置和大小
+                        logoConfig.x = 20;
+                        logoConfig.y = 20;
+                        logoConfig.width = 40;
+                        logoConfig.height = 25;
+                    };
+                    reader.onerror = (e) => {
+                        console.error('Error reading file:', e);
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                const clearLogo = () => {
+                    logoConfig.src = null;
+                    logoConfig.isActive = false;
+                };
+
+                const activateLogo = (e) => {
+                    if (!logoConfig.isDragging && !logoConfig.isResizing) {
+                        logoConfig.isActive = true;
+                    }
+                };
+
+                // 拖动功能
+                const startDrag = (e) => {
+                    if (logoConfig.isResizing) return;
+                    logoConfig.isDragging = true;
+                    logoConfig.startX = e.clientX;
+                    logoConfig.startY = e.clientY;
+                    logoConfig.startPosX = logoConfig.x;
+                    logoConfig.startPosY = logoConfig.y;
+                    
+                    document.addEventListener('mousemove', onDrag);
+                    document.addEventListener('mouseup', stopDrag);
+                    e.preventDefault();
+                };
+
+                const onDrag = (e) => {
+                    if (!logoConfig.isDragging) return;
+                    
+                    const dx = (e.clientX - logoConfig.startX) / previewScale.value / 3.7795; // px to mm
+                    const dy = (e.clientY - logoConfig.startY) / previewScale.value / 3.7795;
+                    
+                    logoConfig.x = Math.max(0, Math.min(currentDimensions.value.width - logoConfig.width, logoConfig.startPosX + dx));
+                    logoConfig.y = Math.max(0, Math.min(currentDimensions.value.height - logoConfig.height, logoConfig.startPosY + dy));
+                };
+
+                const stopDrag = () => {
+                    logoConfig.isDragging = false;
+                    document.removeEventListener('mousemove', onDrag);
+                    document.removeEventListener('mouseup', stopDrag);
+                };
+
+                // 缩放功能
+                const startResize = (e, direction) => {
+                    logoConfig.isResizing = true;
+                    logoConfig.resizeDirection = direction;
+                    logoConfig.startX = e.clientX;
+                    logoConfig.startY = e.clientY;
+                    logoConfig.startWidth = logoConfig.width;
+                    logoConfig.startHeight = logoConfig.height;
+                    logoConfig.startPosX = logoConfig.x;
+                    logoConfig.startPosY = logoConfig.y;
+                    
+                    document.addEventListener('mousemove', onResize);
+                    document.addEventListener('mouseup', stopResize);
+                    e.preventDefault();
+                };
+
+                const onResize = (e) => {
+                    if (!logoConfig.isResizing) return;
+                    
+                    const dx = (e.clientX - logoConfig.startX) / previewScale.value / 3.7795;
+                    const dy = (e.clientY - logoConfig.startY) / previewScale.value / 3.7795;
+                    
+                    const dir = logoConfig.resizeDirection;
+                    const aspectRatio = logoConfig.startWidth / logoConfig.startHeight;
+                    
+                    if (dir === 'se') {
+                        // 右下角：保持宽高比
+                        const newWidth = Math.max(10, logoConfig.startWidth + dx);
+                        logoConfig.width = newWidth;
+                        logoConfig.height = newWidth / aspectRatio;
+                    } else if (dir === 'nw') {
+                        // 左上角：保持宽高比，同时调整位置
+                        const newWidth = Math.max(10, logoConfig.startWidth - dx);
+                        logoConfig.width = newWidth;
+                        logoConfig.height = newWidth / aspectRatio;
+                        logoConfig.x = logoConfig.startPosX + (logoConfig.startWidth - newWidth);
+                        logoConfig.y = logoConfig.startPosY + (logoConfig.startHeight - logoConfig.height);
+                    } else if (dir === 'ne') {
+                        // 右上角
+                        const newWidth = Math.max(10, logoConfig.startWidth + dx);
+                        logoConfig.width = newWidth;
+                        logoConfig.height = newWidth / aspectRatio;
+                        logoConfig.y = logoConfig.startPosY + (logoConfig.startHeight - logoConfig.height);
+                    } else if (dir === 'sw') {
+                        // 左下角
+                        const newWidth = Math.max(10, logoConfig.startWidth - dx);
+                        logoConfig.width = newWidth;
+                        logoConfig.height = newWidth / aspectRatio;
+                        logoConfig.x = logoConfig.startPosX + (logoConfig.startWidth - newWidth);
+                    }
+                    
+                    // 边界限制
+                    if (logoConfig.x < 0) logoConfig.x = 0;
+                    if (logoConfig.y < 0) logoConfig.y = 0;
+                    if (logoConfig.x + logoConfig.width > currentDimensions.value.width) {
+                        logoConfig.width = currentDimensions.value.width - logoConfig.x;
+                        logoConfig.height = logoConfig.width / aspectRatio;
+                    }
+                    if (logoConfig.y + logoConfig.height > currentDimensions.value.height) {
+                        logoConfig.height = currentDimensions.value.height - logoConfig.y;
+                        logoConfig.width = logoConfig.height * aspectRatio;
+                    }
+                };
+
+                const stopResize = () => {
+                    logoConfig.isResizing = false;
+                    logoConfig.resizeDirection = null;
+                    document.removeEventListener('mousemove', onResize);
+                    document.removeEventListener('mouseup', stopResize);
+                };
+
+                const printEnvelope = () => {
+                    showPrintDialog.value = true;
+                };
+
+                const confirmPrint = () => {
+                    showPrintDialog.value = false;
+                    setTimeout(() => {
+                        window.print();
+                    }, 100);
+                };
+
+                return {
+                    activeTab,
+                    panels,
+                    sender,
+                    recipient,
+                    meta,
+                    logoFile,
+                    logoConfig,
+                    logoStyle,
+                    styleConfig,
+                    regions,
+                    selectedRegion,
+                    currentRegionDesc,
+                    envelopeSizes,
+                    selectedSize,
+                    customSize,
+                    previewScale,
+                    currentDimensions,
+                    currentSizeLabel,
+                    envelopeStyle,
+                    printCss,
+                    isFormValid,
+                    showPrintDialog,
+                    handleLogoUpload,
+                    clearLogo,
+                    activateLogo,
+                    startDrag,
+                    startResize,
+                    printEnvelope,
+                    confirmPrint
+                };
+            }
+        });
+
+        const vuetify = createVuetify();
+        app.use(vuetify);
+        app.mount('#app');
+
+        // 移动设备检测
+        function isMobileDevice() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            const mobileKeywords = ['android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone'];
+            
+            // 检查 User Agent
+            const isMobileUA = mobileKeywords.some(keyword => userAgent.includes(keyword));
+            
+            // 检查触摸屏和屏幕宽度
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth <= 1024;
+            
+            return isMobileUA || (isTouchDevice && isSmallScreen);
+        }
+
+        // 页面加载时检测
+        window.addEventListener('DOMContentLoaded', function() {
+            if (isMobileDevice()) {
+                document.getElementById('mobileWarning').style.display = 'flex';
+                document.getElementById('app').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
